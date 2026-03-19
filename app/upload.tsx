@@ -13,8 +13,8 @@ import {
   View,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { parseCsv, ImportPreview } from '../src/services/csvImport';
@@ -47,24 +47,28 @@ export default function SettingsScreen() {
 
   // ── Profile image ────────────────────────────────────────────────
   const handlePickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo access to set a profile image.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (result.canceled) return;
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library in Settings.');
+        return;
+      }
 
-    const picked = result.assets[0].uri;
-    // Copy to a permanent location so the URI survives across app restarts
-    const dest = FileSystem.documentDirectory + 'profile-image.jpg';
-    await FileSystem.copyAsync({ from: picked, to: dest });
-    setProfileImageUri(dest);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled) return;
+
+      const picked = result.assets[0].uri;
+      const dest = FileSystem.documentDirectory + 'profile-image.jpg';
+      await FileSystem.copyAsync({ from: picked, to: dest });
+      setProfileImageUri(dest);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to pick image.');
+    }
   };
 
   const handleRemoveImage = () => {
