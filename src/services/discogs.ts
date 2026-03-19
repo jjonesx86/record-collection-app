@@ -1,0 +1,156 @@
+import { DiscogsResult, DiscogsSearchResponse, DiscogsRawResult } from '../types';
+
+const BASE_URL = 'https://api.discogs.com';
+const TOKEN = process.env.EXPO_PUBLIC_DISCOGS_TOKEN ?? '';
+const USER_AGENT = 'RecordCollectionApp/1.0';
+
+const HEADERS = {
+  'User-Agent': USER_AGENT,
+  'Authorization': `Discogs token=${TOKEN}`,
+};
+
+function isValidArtUrl(url?: string): boolean {
+  if (!url) return false;
+  if (url.includes('spacer')) return false;
+  if (url.includes('no-image')) return false;
+  return true;
+}
+
+function parseCoverImage(result: DiscogsRawResult): string | undefined {
+  if (isValidArtUrl(result.cover_image)) return result.cover_image;
+  if (isValidArtUrl(result.thumb)) return result.thumb;
+  return undefined;
+}
+
+function normalizeSearchTerm(term: string): string {
+  return term
+    .toLowerCase()
+    .trim()
+    // Remove trailing ", The" / ", A" / ", An" that some databases append
+    .replace(/,\s+(the|a|an)$/i, '')
+    // Strip characters that confuse Discogs search
+    .replace(/['"]/g, '')
+    .trim();
+}
+
+function parseArtistFromTitle(title: string): { artist: string; album: string } {
+  const separatorIndex = title.indexOf(' - ');
+  if (separatorIndex !== -1) {
+    return {
+      artist: title.substring(0, separatorIndex).trim(),
+      album: title.substring(separatorIndex + 3).trim(),
+    };
+  }
+  return { artist: '', album: title.trim() };
+}
+
+function mapResult(raw: DiscogsRawResult): DiscogsResult {
+  const { artist, album } = parseArtistFromTitle(raw.title);
+  const cover = parseCoverImage(raw);
+
+  return {
+    id: raw.id,
+    title: album || raw.title,
+    artist,
+    year: raw.year ? parseInt(raw.year, 10) : undefined,
+    label: raw.label?.[0],
+    thumb: raw.thumb,
+    cover_image: cover,
+    genre: raw.genre,
+    style: raw.style,
+    discogs_id: String(raw.id),
+  };
+}
+
+async function fetchSearch(params: URLSearchParams): Promise<DiscogsResult[]> {
+  const response = await fetch(`${BASE_URL}/database/search?${params}`, { headers: HEADERS });
+  if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
+  const data: DiscogsSearchResponse = await response.json();
+  return data.results.map(mapResult);
+}
+
+async function searchWithVinylFallback(query: { artist?: string; album?: string }): Promise<DiscogsResult[]> {
+  const base = new URLSearchParams({ type: 'release', format: 'Vinyl' });
+  if (query.artist) base.set('artist', normalizeSearchTerm(query.artist));
+  if (query.album) base.set('release_title', normalizeSearchTerm(query.album));
+
+  const results = await fetchSearch(base);
+  if (results.length > 0) return results;
+
+  // Retry without format filter — some vinyl releases are categorized differently on Discogs
+  const broad = new URLSearchParams({ type: 'release' });
+  if (query.artist) broad.set('artist', normalizeSearchTerm(query.artist));
+  if (query.album) broad.set('release_title', normalizeSearchTerm(query.album));
+  return fetchSearch(broad);
+}
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function searchDiscogs(
+  query: { artist?: string; album?: string },
+  callback: (results: DiscogsResult[], error?: string) => void,
+  debounceMs = 600
+): void {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const results = await searchWithVinylFallback(query);
+      callback(results);
+    } catch (e) {
+      callback([], e instanceof Error ? e.message : 'Search failed');
+    }
+  }, debounceMs);
+}
+
+export async function searchDiscogsImmediate(query: { artist?: string; album?: string }): Promise<DiscogsResult[]> {
+  return searchWithVinylFallback(query);
+}
+
+export async function lookupByBarcode(barcode: string): Promise<DiscogsResult[]> {
+  const params = new URLSearchParams({ barcode, type: 'release', format: 'Vinyl' });
+  const results = await fetchSearch(params);
+  if (results.length > 0) return results;
+
+  // Retry without format filter
+  const broad = new URLSearchParams({ barcode, type: 'release' });
+  return fetchSearch(broad);
+}
+
+/**
+ * Best-effort album art lookup: searches Discogs, and if the search result
+ * has no usable image, fetches the full release to get the real artwork.
+ */
+export async function findAlbumArt(query: { artist: string; album: string }): Promise<string | undefined> {
+  const results = await searchWithVinylFallback(query);
+  if (results.length === 0) return undefined;
+
+  const best = results[0];
+  if (best.cover_image) return best.cover_image;
+
+  // Search result had no image — fetch the full release for real artwork
+  if (best.discogs_id) {
+    try {
+      const details = await fetchReleaseDetails(best.discogs_id);
+      if (details.cover_image) return details.cover_image;
+    } catch {
+      // ignore — fall through to thumb
+    }
+  }
+
+  return best.thumb ?? undefined;
+}
+
+export async function fetchReleaseDetails(discogsId: string): Promise<{ artist: string; label?: string; year?: number; cover_image?: string }> {
+  const response = await fetch(`${BASE_URL}/releases/${discogsId}`, { headers: HEADERS });
+
+  if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
+
+  const data = await response.json();
+  return {
+    artist: data.artists?.[0]?.name ?? '',
+    label: data.labels?.[0]?.name,
+    year: data.year,
+    cover_image: isValidArtUrl(data.images?.[0]?.uri) ? data.images[0].uri : undefined,
+  };
+}

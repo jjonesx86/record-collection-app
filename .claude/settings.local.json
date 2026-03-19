@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//usr/local/bin/**)",
+      "Bash(echo $PATH)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/jeffj/.nvm/**)",
+      "Read(//Users/jeffj/.volta/**)",
+      "Bash(export PATH=\"/opt/homebrew/bin:$PATH\")",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(pkill -f \"expo start\")",
+      "Bash(pkill -f \"metro\")",
+      "Bash(npm info:*)",
+      "Bash(npx expo:*)"
+    ]
+  }
+}
