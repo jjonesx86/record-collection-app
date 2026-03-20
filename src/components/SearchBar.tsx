@@ -9,7 +9,7 @@ interface Props {
   autoFocus?: boolean;
 }
 
-export function SearchBar({ value, onChangeText, placeholder = 'Search artist or album…', autoFocus }: Props) {
+export function SearchBar({ value, onChangeText, placeholder = 'Search or ask e.g. "Adele albums"…', autoFocus }: Props) {
   const inputRef = useRef<TextInput>(null);
 
   return (

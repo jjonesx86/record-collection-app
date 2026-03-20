@@ -8,7 +8,7 @@ export default function AddChoiceScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.content}>
-        <Text style={styles.heading}>Add a Record</Text>
+        <Text style={styles.heading}>Add an Album</Text>
         <Text style={styles.sub}>How would you like to add it?</Text>
 
         <TouchableOpacity

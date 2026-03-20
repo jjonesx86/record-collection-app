@@ -8,9 +8,6 @@ interface CsvRow {
   album?: string;
   Genre?: string;
   genre?: string;
-  'Album Art'?: string;
-  album_art?: string;
-  album_art_url?: string;
 }
 
 export interface ImportPreview {
@@ -40,18 +37,10 @@ export function parseCsv(csvText: string): ImportPreview {
 
     if (!artist || !album) continue;
 
-    const albumArtUrl = (
-      row['Album Art'] ??
-      row.album_art ??
-      row.album_art_url ??
-      ''
-    ).trim();
-
     records.push({
       artist,
       album,
       genre: (row.Genre ?? row.genre ?? '').trim() || undefined,
-      album_art_url: albumArtUrl || undefined,
     });
   }
 

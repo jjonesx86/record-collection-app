@@ -125,10 +125,13 @@ export async function findAlbumArt(query: { artist: string; album: string }): Pr
   const results = await searchWithVinylFallback(query);
   if (results.length === 0) return undefined;
 
-  const best = results[0];
-  if (best.cover_image) return best.cover_image;
+  // Check the first several results — the top result often has no cover but later ones do
+  const candidates = results.slice(0, 5);
+  const withCover = candidates.find((r) => r.cover_image);
+  if (withCover?.cover_image) return withCover.cover_image;
 
-  // Search result had no image — fetch the full release for real artwork
+  // None had a usable cover in search results — fetch full release details for the best match
+  const best = candidates[0];
   if (best.discogs_id) {
     try {
       const details = await fetchReleaseDetails(best.discogs_id);

@@ -31,6 +31,7 @@ export default function SettingsScreen() {
   const [importState, setImportState] = useState<ImportState>('idle');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const [artState, setArtState] = useState<ArtState>('idle');
   const [artProgress, setArtProgress] = useState({ done: 0, total: 0, found: 0 });
 
@@ -123,7 +124,17 @@ export default function SettingsScreen() {
     if (!preview) return;
     setImportState('importing');
     try {
-      const count = await upsertRecords(preview.records);
+      // Filter out records that already exist in the collection (by artist + album)
+      const existing = new Set(
+        records.map((r) => `${r.artist.toLowerCase().trim()}|${r.album.toLowerCase().trim()}`)
+      );
+      const newRecords = preview.records.filter(
+        (r) => !existing.has(`${r.artist.toLowerCase().trim()}|${r.album.toLowerCase().trim()}`)
+      );
+      const skipped = preview.records.length - newRecords.length;
+      setSkippedCount(skipped);
+
+      const count = newRecords.length > 0 ? await upsertRecords(newRecords) : 0;
       setImportedCount(count);
       const freshRecords = await fetchAllRecords();
       setRecords(freshRecords);
@@ -142,6 +153,7 @@ export default function SettingsScreen() {
     setPreview(null);
     setImportState('idle');
     setImportedCount(0);
+    setSkippedCount(0);
   };
 
   // ── Album art ────────────────────────────────────────────────────
@@ -230,7 +242,10 @@ export default function SettingsScreen() {
         <View style={styles.doneContainer}>
           <Ionicons name="checkmark-circle-outline" size={72} color="#34C759" />
           <Text style={styles.doneHeading}>Import Complete</Text>
-          <Text style={styles.doneSub}>{importedCount} records added to your collection.</Text>
+          <Text style={styles.doneSub}>{importedCount} album{importedCount !== 1 ? 's' : ''} added to your collection.</Text>
+          {skippedCount > 0 && (
+            <Text style={styles.doneSub}>{skippedCount} duplicate{skippedCount !== 1 ? 's' : ''} skipped.</Text>
+          )}
           <TouchableOpacity style={styles.primaryBtn} onPress={resetImport} activeOpacity={0.8}>
             <Text style={styles.primaryBtnText}>Import Another File</Text>
           </TouchableOpacity>
@@ -309,7 +324,7 @@ export default function SettingsScreen() {
         </View>
         <Text style={styles.sectionFooter}>
           Export from Google Sheets as CSV (File → Download → CSV).{'\n'}
-          Expected columns: <Text style={styles.mono}>Artist, Album, Genre, Album Art</Text>
+          Expected columns: <Text style={styles.mono}>Artist, Album, Genre</Text>
         </Text>
 
         {/* ── Album art section ── */}

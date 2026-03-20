@@ -34,10 +34,13 @@ export const useCollectionStore = create<CollectionState>()(
       collectionName: 'Jones Record Collection',
       profileImageUri: null,
 
-      setRecords: (records) => set({ records }),
+      setRecords: (records) =>
+        set({ records: [...records].sort((a, b) => a.artist.localeCompare(b.artist)) }),
 
       addRecord: (record) =>
-        set((state) => ({ records: [...state.records, record] })),
+        set((state) => ({
+          records: [...state.records, record].sort((a, b) => a.artist.localeCompare(b.artist)),
+        })),
 
       updateRecord: (id, updates) =>
         set((state) => ({
