@@ -81,18 +81,26 @@ async function fetchSearch(params: URLSearchParams): Promise<DiscogsResult[]> {
 }
 
 async function searchWithVinylFallback(query: { artist?: string; album?: string }): Promise<DiscogsResult[]> {
-  const base = new URLSearchParams({ type: 'release', format: 'Vinyl' });
-  if (query.artist) base.set('artist', normalizeSearchTerm(query.artist));
-  if (query.album) base.set('release_title', normalizeSearchTerm(query.album));
+  const artist = query.artist ? normalizeSearchTerm(query.artist) : undefined;
+  const album = query.album ? normalizeSearchTerm(query.album) : undefined;
 
-  const results = await fetchSearch(base);
-  if (results.length > 0) return results;
+  function buildParams(extra: Record<string, string>): URLSearchParams {
+    const p = new URLSearchParams({ type: 'release', ...extra });
+    if (artist) p.set('artist', artist);
+    if (album) p.set('release_title', album);
+    return p;
+  }
 
-  // Retry without format filter — some vinyl releases are categorized differently on Discogs
-  const broad = new URLSearchParams({ type: 'release' });
-  if (query.artist) broad.set('artist', normalizeSearchTerm(query.artist));
-  if (query.album) broad.set('release_title', normalizeSearchTerm(query.album));
-  return fetchSearch(broad);
+  // 1. US vinyl pressings first
+  const usVinyl = await fetchSearch(buildParams({ format: 'Vinyl', country: 'US' }));
+  if (usVinyl.length > 0) return usVinyl;
+
+  // 2. Any country vinyl
+  const anyVinyl = await fetchSearch(buildParams({ format: 'Vinyl' }));
+  if (anyVinyl.length > 0) return anyVinyl;
+
+  // 3. Any format (some vinyl releases are miscategorised on Discogs)
+  return fetchSearch(buildParams({}));
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
