@@ -63,11 +63,18 @@ function mapResult(raw: DiscogsRawResult): DiscogsResult {
   };
 }
 
+async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { headers: HEADERS, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchSearch(params: URLSearchParams): Promise<DiscogsResult[]> {
-  const response = await fetch(`${BASE_URL}/database/search?${params}`, {
-    headers: HEADERS,
-    signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetchWithTimeout(`${BASE_URL}/database/search?${params}`);
   if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
   const data: DiscogsSearchResponse = await response.json();
   return data.results.map(mapResult);
@@ -149,10 +156,7 @@ export async function findAlbumArt(query: { artist: string; album: string }): Pr
 }
 
 export async function fetchReleaseDetails(discogsId: string): Promise<{ artist: string; label?: string; year?: number; cover_image?: string }> {
-  const response = await fetch(`${BASE_URL}/releases/${discogsId}`, {
-    headers: HEADERS,
-    signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetchWithTimeout(`${BASE_URL}/releases/${discogsId}`);
 
   if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
 
