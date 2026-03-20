@@ -55,22 +55,39 @@ async function findRecord(artist?: string, album?: string, raw?: string): Promis
     if (swapped?.[0]) return swapped[0];
   }
 
-  // Fall back to general search across both fields
+  // Fall back to general search across both fields using two separate queries
+  // (avoids embedding user input in PostgREST filter string syntax)
   const term = (raw ?? '').trim();
   if (term) {
-    const { data } = await supabase
+    const { data: artistData } = await supabase
       .from('records')
       .select('artist, album, year')
-      .or(`artist.ilike.%${term}%,album.ilike.%${term}%`)
+      .ilike('artist', `%${term}%`)
       .limit(1);
-    if (data?.[0]) return data[0];
+    if (artistData?.[0]) return artistData[0];
+
+    const { data: albumData } = await supabase
+      .from('records')
+      .select('artist, album, year')
+      .ilike('album', `%${term}%`)
+      .limit(1);
+    if (albumData?.[0]) return albumData[0];
   }
 
   return null;
 }
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function buildTwiml(message: string): Response {
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${message}</Message></Response>`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escapeXml(message)}</Message></Response>`;
   return new Response(xml, { headers: { 'Content-Type': 'text/xml' } });
 }
 

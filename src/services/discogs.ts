@@ -11,6 +11,7 @@ const HEADERS = {
 
 function isValidArtUrl(url?: string): boolean {
   if (!url) return false;
+  if (!url.startsWith('https://')) return false;
   if (url.includes('spacer')) return false;
   if (url.includes('no-image')) return false;
   return true;
@@ -63,7 +64,10 @@ function mapResult(raw: DiscogsRawResult): DiscogsResult {
 }
 
 async function fetchSearch(params: URLSearchParams): Promise<DiscogsResult[]> {
-  const response = await fetch(`${BASE_URL}/database/search?${params}`, { headers: HEADERS });
+  const response = await fetch(`${BASE_URL}/database/search?${params}`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(10000),
+  });
   if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
   const data: DiscogsSearchResponse = await response.json();
   return data.results.map(mapResult);
@@ -145,7 +149,10 @@ export async function findAlbumArt(query: { artist: string; album: string }): Pr
 }
 
 export async function fetchReleaseDetails(discogsId: string): Promise<{ artist: string; label?: string; year?: number; cover_image?: string }> {
-  const response = await fetch(`${BASE_URL}/releases/${discogsId}`, { headers: HEADERS });
+  const response = await fetch(`${BASE_URL}/releases/${discogsId}`, {
+    headers: HEADERS,
+    signal: AbortSignal.timeout(10000),
+  });
 
   if (!response.ok) throw new Error(`Discogs error: ${response.status}`);
 

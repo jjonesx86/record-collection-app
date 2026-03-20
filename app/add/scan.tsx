@@ -61,6 +61,7 @@ export default function ScanScreen() {
 
       navigateToManual(data, results);
     } catch {
+      isProcessing.current = false;
       router.push({ pathname: '/add/manual', params: { barcode: data } });
     }
   };

@@ -25,7 +25,7 @@ import { useCollectionStore } from '../src/store/collectionStore';
 type ImportState = 'idle' | 'preview' | 'importing' | 'done';
 type ArtState = 'idle' | 'running' | 'done';
 
-const RATE_LIMIT_MS = 1100;
+const RATE_LIMIT_MS = 1500;
 
 export default function SettingsScreen() {
   const [importState, setImportState] = useState<ImportState>('idle');
