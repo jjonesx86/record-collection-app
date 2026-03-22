@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Keyboard,
@@ -12,7 +12,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCollectionStore } from '../../src/store/collectionStore';
@@ -37,6 +37,16 @@ export default function RecordDetailScreen() {
   const [genre, setGenre] = useState('');
   const [year, setYear] = useState('');
   const [label, setLabel] = useState('');
+
+  const navigation = useNavigation();
+
+  // Disable back button and swipe gesture while editing
+  useEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: !editing,
+      headerBackVisible: !editing,
+    });
+  }, [editing, navigation]);
 
   if (!record) {
     return (

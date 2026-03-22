@@ -1,15 +1,38 @@
-import { Stack } from 'expo-router';
+import { useEffect } from 'react';
+import { Stack, router, Href } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { onAuthStateChange } from '../src/services/supabase';
+import { useCollectionStore } from '../src/store/collectionStore';
+
+const HEADER_BG = '#1a1a2e';
 
 export default function RootLayout() {
+  useEffect(() => {
+    const { data: { subscription } } = onAuthStateChange((event, _session) => {
+      if (event === 'SIGNED_OUT') {
+        useCollectionStore.getState().clearAll();
+        router.replace('/auth/login' as Href);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="collection/index" options={{ headerShown: false, title: 'Home' }} />
-      <Stack.Screen name="collection/[id]" options={{ title: 'Record Details' }} />
-      <Stack.Screen name="add/index" options={{ title: 'Add Record' }} />
-      <Stack.Screen name="add/manual" options={{ title: 'Add Manually' }} />
-      <Stack.Screen name="add/scan" options={{ title: 'Scan Barcode' }} />
-      <Stack.Screen name="upload" options={{ title: 'Settings', headerBackTitle: 'Home' }} />
-    </Stack>
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: HEADER_BG },
+          headerTintColor: '#fff',
+          headerTitleStyle: { color: '#fff', fontSize: 17, fontWeight: '600' },
+        }}
+      >
+        <Stack.Screen name="auth/login" options={{ headerShown: false }} />
+        <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="collection/[id]" options={{ title: 'Record Details', headerBackTitle: 'Collection' }} />
+      </Stack>
+    </>
   );
 }

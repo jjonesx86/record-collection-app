@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   ActivityIndicator,
   FlatList,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -18,7 +19,18 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { parseCsv, ImportPreview } from '../src/services/csvImport';
-import { upsertRecords, fetchAllRecords, updateRecord } from '../src/services/supabase';
+import {
+  upsertRecords,
+  fetchAllRecords,
+  updateRecord,
+  signOut,
+  updateUserProfile,
+  uploadProfileImage,
+  getCurrentUser,
+  updateEmail,
+  updatePassword,
+  deleteAllUserRecords,
+} from '../src/services/supabase';
 import { findAlbumArt } from '../src/services/discogs';
 import { useCollectionStore } from '../src/store/collectionStore';
 
@@ -45,6 +57,15 @@ export default function SettingsScreen() {
   const setProfileImageUri = useCollectionStore((s) => s.setProfileImageUri);
 
   const [nameInput, setNameInput] = useState(collectionName);
+  const [emailInput, setEmailInput] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    getCurrentUser()
+      .then((user) => { if (user?.email) setEmailInput(user.email); })
+      .catch(() => {});
+  }, []);
 
   // ── Profile image ────────────────────────────────────────────────
   const handlePickImage = async () => {
@@ -64,30 +85,142 @@ export default function SettingsScreen() {
       if (result.canceled) return;
 
       const picked = result.assets[0].uri;
-      const dest = FileSystem.documentDirectory + 'profile-image.jpg';
-      await FileSystem.copyAsync({ from: picked, to: dest });
-      setProfileImageUri(dest);
+      const url = await uploadProfileImage(picked);
+      await updateUserProfile({ profile_image_url: url });
+      setProfileImageUri(url);
     } catch (e) {
-      Alert.alert('Error', 'Failed to pick image.');
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to upload image.');
     }
   };
 
   const handleRemoveImage = () => {
     Alert.alert('Remove Photo', 'Remove your profile photo from the splash screen?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => setProfileImageUri(null) },
+      {
+        text: 'Cancel', style: 'cancel',
+      },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await updateUserProfile({ profile_image_url: null });
+            setProfileImageUri(null);
+          } catch {
+            setProfileImageUri(null);
+          }
+        },
+      },
     ]);
   };
 
   // ── Collection name ──────────────────────────────────────────────
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     const trimmed = nameInput.trim();
     if (!trimmed) {
       Alert.alert('Invalid Name', 'Collection name cannot be empty.');
       return;
     }
-    setCollectionName(trimmed);
-    Alert.alert('Saved', 'Collection name updated.');
+    try {
+      await updateUserProfile({ collection_name: trimmed });
+      setCollectionName(trimmed);
+      Alert.alert('Saved', 'Collection name updated.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save name.');
+    }
+  };
+
+  // ── Email update ─────────────────────────────────────────────────
+  const handleUpdateEmail = async () => {
+    const trimmed = emailInput.trim();
+    if (!trimmed) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    try {
+      await updateEmail(trimmed);
+      Alert.alert('Email Updated', 'Your email address has been updated.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to update email.');
+    }
+  };
+
+  // ── Password update ───────────────────────────────────────────────
+  const handleUpdatePassword = async () => {
+    if (!newPassword) {
+      Alert.alert('Enter Password', 'Please enter a new password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Too Short', 'Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Mismatch', 'Passwords do not match.');
+      return;
+    }
+    try {
+      await updatePassword(newPassword);
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Password Updated', 'Your password has been changed.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to update password.');
+    }
+  };
+
+  // ── Sign out ─────────────────────────────────────────────────────
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (e) {
+            Alert.alert('Error', e instanceof Error ? e.message : 'Failed to sign out.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteCatalog = () => {
+    Alert.alert(
+      'Delete Catalog',
+      'This will permanently delete all records in your collection. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Catalog',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              'Your entire catalog will be deleted. There is no way to recover it.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await deleteAllUserRecords();
+                      useCollectionStore.getState().setRecords([]);
+                      useCollectionStore.getState().setLastFetched(0);
+                      Alert.alert('Done', 'Your catalog has been deleted.');
+                    } catch (e) {
+                      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to delete catalog.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
   };
 
   // ── CSV import ───────────────────────────────────────────────────
@@ -257,10 +390,17 @@ export default function SettingsScreen() {
   // ── Main settings view ───────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
 
-        {/* ── Profile section ── */}
-        <Text style={styles.sectionLabel}>PROFILE</Text>
+        {/* ── Collection Profile section ── */}
+        <Text style={styles.sectionLabel}>COLLECTION PROFILE</Text>
         <View style={styles.section}>
           <View style={styles.profileRow}>
             <TouchableOpacity onPress={handlePickImage} activeOpacity={0.8}>
@@ -275,7 +415,6 @@ export default function SettingsScreen() {
                 <Ionicons name="camera" size={12} color="#fff" />
               </View>
             </TouchableOpacity>
-
             <View style={styles.profileInfo}>
               <Text style={styles.profileLabel}>Collection Photo</Text>
               <Text style={styles.profileSub}>Shown on the loading screen</Text>
@@ -290,36 +429,41 @@ export default function SettingsScreen() {
               )}
             </View>
           </View>
-        </View>
 
-        {/* ── Collection name section ── */}
-        <Text style={styles.sectionLabel}>COLLECTION NAME</Text>
-        <View style={styles.section}>
-          <TextInput
-            style={styles.nameInput}
-            value={nameInput}
-            onChangeText={setNameInput}
-            placeholder="e.g. Jones Record Collection"
-            placeholderTextColor="#AAA"
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={handleSaveName}
-          />
           <View style={styles.sectionDivider} />
-          <TouchableOpacity style={styles.sectionRow} onPress={handleSaveName} activeOpacity={0.7}>
-            <Text style={styles.sectionRowText}>Save Name</Text>
-            <Ionicons name="checkmark" size={18} color="#007AFF" />
+
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Collection Name</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={nameInput}
+              onChangeText={setNameInput}
+              placeholder="e.g. Jones Record Collection"
+              placeholderTextColor="#AAA"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={handleSaveName}
+            />
+          </View>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={handleSaveName} activeOpacity={0.7}>
+            <Text style={styles.actionText}>Save Name</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.sectionFooter}>Used on the home screen and loading screen.</Text>
 
-        {/* ── Data section ── */}
-        <Text style={styles.sectionLabel}>DATA</Text>
+        {/* ── Collection Data section ── */}
+        <Text style={styles.sectionLabel}>COLLECTION DATA</Text>
         <View style={styles.section}>
           <TouchableOpacity style={styles.sectionRow} onPress={pickFile} activeOpacity={0.7}>
             <Ionicons name="document-text-outline" size={20} color="#007AFF" style={styles.rowIcon} />
             <Text style={styles.sectionRowText}>Import from CSV</Text>
             <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+          </TouchableOpacity>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity style={styles.sectionRow} onPress={handleDeleteCatalog} activeOpacity={0.7}>
+            <Ionicons name="trash-outline" size={20} color="#FF3B30" style={styles.rowIcon} />
+            <Text style={[styles.sectionRowText, styles.destructiveText]}>Delete Catalog</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.sectionFooter}>
@@ -346,7 +490,6 @@ export default function SettingsScreen() {
               </Text>
             </View>
           )}
-
           <TouchableOpacity
             style={[styles.sectionRow, isRefreshing && styles.rowDisabled]}
             onPress={() => runArtRefresh(false)}
@@ -358,9 +501,7 @@ export default function SettingsScreen() {
               {isRefreshing ? 'Fetching…' : `Fetch Missing Art (${missingArtCount})`}
             </Text>
           </TouchableOpacity>
-
           <View style={styles.sectionDivider} />
-
           <TouchableOpacity
             style={[styles.sectionRow, isRefreshing && styles.rowDisabled]}
             onPress={() => runArtRefresh(true)}
@@ -377,13 +518,78 @@ export default function SettingsScreen() {
           Fetches artwork from Discogs for records missing art, or replaces all existing art.
         </Text>
 
+        {/* ── Account section ── */}
+        <Text style={styles.sectionLabel}>ACCOUNT USERNAME</Text>
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Email Address</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={emailInput}
+              onChangeText={setEmailInput}
+              placeholder="Email address"
+              placeholderTextColor="#AAA"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+            />
+          </View>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={handleUpdateEmail} activeOpacity={0.7}>
+            <Text style={styles.actionText}>Update Email</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.sectionFooter}>Changing your email may require confirmation.</Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>ACCOUNT PASSWORD</Text>
+        <View style={styles.section}>
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>New Password</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Enter new password"
+              placeholderTextColor="#AAA"
+              secureTextEntry
+              textContentType="newPassword"
+            />
+          </View>
+          <View style={styles.sectionDivider} />
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Confirm Password</Text>
+            <TextInput
+              style={styles.fieldInput}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter new password"
+              placeholderTextColor="#AAA"
+              secureTextEntry
+              textContentType="newPassword"
+            />
+          </View>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity style={styles.actionRow} onPress={handleUpdatePassword} activeOpacity={0.7}>
+            <Text style={styles.actionText}>Update Password</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.section, { marginTop: 32 }]}>
+          <TouchableOpacity style={styles.sectionRow} onPress={handleSignOut} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={20} color="#FF3B30" style={styles.rowIcon} />
+            <Text style={[styles.sectionRowText, styles.signOutText]}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F2F2F7' },
+  kav: { flex: 1 },
   scroll: { padding: 16, paddingBottom: 48 },
 
   sectionLabel: {
@@ -417,6 +623,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#111',
+  },
+  destructiveText: {
+    color: '#FF3B30',
   },
   sectionDivider: {
     height: StyleSheet.hairlineWidth,
@@ -465,12 +674,38 @@ const styles = StyleSheet.create({
   chooseText: { fontSize: 13, color: '#007AFF', marginTop: 4 },
   removeText: { fontSize: 13, color: '#FF3B30', marginTop: 4 },
 
-  // Collection name
-  nameInput: {
+  // Field rows (label + input)
+  fieldRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8E8E93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 6,
+  },
+  fieldInput: {
     fontSize: 16,
     color: '#111',
-    paddingHorizontal: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+
+  // Action button rows
+  actionRow: {
     paddingVertical: 14,
+    alignItems: 'center',
+  },
+  actionText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '500',
   },
 
   // Progress
@@ -529,4 +764,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#333',
   },
+  signOutText: { color: '#FF3B30' },
 });

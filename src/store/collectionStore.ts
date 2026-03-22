@@ -20,6 +20,7 @@ interface CollectionState {
   setLastFetched: (timestamp: number) => void;
   setCollectionName: (name: string) => void;
   setProfileImageUri: (uri: string | null) => void;
+  clearAll: () => void;
 
   hasDuplicate: (artist: string, album: string, excludeId?: string) => boolean;
 }
@@ -31,7 +32,7 @@ export const useCollectionStore = create<CollectionState>()(
       lastFetched: null,
       isLoading: false,
       error: null,
-      collectionName: 'Jones Record Collection',
+      collectionName: 'My Record Collection',
       profileImageUri: null,
 
       setRecords: (records) =>
@@ -59,6 +60,14 @@ export const useCollectionStore = create<CollectionState>()(
       setLastFetched: (lastFetched) => set({ lastFetched }),
       setCollectionName: (collectionName) => set({ collectionName }),
       setProfileImageUri: (profileImageUri) => set({ profileImageUri }),
+
+      clearAll: () =>
+        set({
+          records: [],
+          lastFetched: null,
+          collectionName: 'My Record Collection',
+          profileImageUri: null,
+        }),
 
       hasDuplicate: (artist, album, excludeId) => {
         const lArtist = artist.toLowerCase().trim();

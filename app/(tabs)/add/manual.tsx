@@ -15,12 +15,12 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlbumArtImage } from '../../src/components/AlbumArtImage';
-import { DiscogsResultsPicker } from '../../src/components/DiscogsResultsPicker';
-import { useDiscogs } from '../../src/hooks/useDiscogs';
-import { useCollectionStore } from '../../src/store/collectionStore';
-import { insertRecord } from '../../src/services/supabase';
-import { DiscogsResult } from '../../src/types';
+import { AlbumArtImage } from '../../../src/components/AlbumArtImage';
+import { DiscogsResultsPicker } from '../../../src/components/DiscogsResultsPicker';
+import { useDiscogs } from '../../../src/hooks/useDiscogs';
+import { useCollectionStore } from '../../../src/store/collectionStore';
+import { insertRecord } from '../../../src/services/supabase';
+import { DiscogsResult } from '../../../src/types';
 
 type Params = {
   barcode?: string;
@@ -48,7 +48,6 @@ export default function ManualEntryScreen() {
 
   const { results, isSearching, searchError, search, clearResults } = useDiscogs();
 
-  // Pre-populate results from barcode scan if passed
   const [preloadedResults] = useState<DiscogsResult[]>(() => {
     if (params.discogsResults) {
       try { return JSON.parse(params.discogsResults); } catch { return []; }
@@ -132,7 +131,7 @@ export default function ManualEntryScreen() {
       });
       addRecord(newRecord);
       Alert.alert('Saved!', `"${album}" added to your collection.`, [
-        { text: 'OK', onPress: () => router.push('/collection') },
+        { text: 'OK', onPress: () => router.push('/home') },
       ]);
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save record.');

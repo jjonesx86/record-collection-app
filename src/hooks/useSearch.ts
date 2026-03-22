@@ -45,7 +45,7 @@ function parseNaturalLanguage(raw: string): ParsedQuery | null {
   // "[album] by [artist]"
   const byMatch = text.match(/^(.+?)\s+by\s+(.+)$/i);
   if (byMatch) {
-    const leftSide = byMatch[1].replace(/\s+albums?$/i, '').trim();
+    const leftSide = byMatch[1].replace(/\s+(albums?|records?|vinyls?|lps?)$/i, '').trim();
     // If nothing meaningful remains on the left, treat as artist-only
     if (!leftSide || /^(our|my|the|all|any|some)$/i.test(leftSide)) {
       return { artist: byMatch[2].trim() };
@@ -53,8 +53,8 @@ function parseNaturalLanguage(raw: string): ParsedQuery | null {
     return { album: leftSide, artist: byMatch[2].trim() };
   }
 
-  // "all [artist] albums" / "[artist] albums" / "any [artist]"
-  const artistAlbumMatch = text.match(/^(.+?)\s+albums?$/i);
+  // "all [artist] albums/records/vinyls" / "[artist] albums" / "any [artist]"
+  const artistAlbumMatch = text.match(/^(.+?)\s+(albums?|records?|vinyls?|lps?)$/i);
   if (artistAlbumMatch) {
     return { artist: artistAlbumMatch[1].trim() };
   }

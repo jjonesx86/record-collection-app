@@ -31,17 +31,22 @@ export function parseCsv(csvText: string): ImportPreview {
 
   const records: Omit<VinylRecord, 'id' | 'created_at' | 'updated_at'>[] = [];
 
+  let skippedRows = 0;
   for (const row of result.data) {
     const artist = (row.Artist ?? row.artist ?? '').trim();
     const album = (row.Album ?? row.album ?? '').trim();
 
-    if (!artist || !album) continue;
+    if (!artist || !album) { skippedRows++; continue; }
 
     records.push({
       artist,
       album,
       genre: (row.Genre ?? row.genre ?? '').trim() || undefined,
     });
+  }
+
+  if (skippedRows > 0) {
+    errors.push(`${skippedRows} row${skippedRows !== 1 ? 's' : ''} skipped (missing Artist or Album).`);
   }
 
   return { records, total: records.length, errors };

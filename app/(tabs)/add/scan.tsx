@@ -4,10 +4,10 @@ import { CameraView } from 'expo-camera';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useCamera } from '../../src/hooks/useCamera';
-import { lookupByBarcode } from '../../src/services/discogs';
-import { useCollectionStore } from '../../src/store/collectionStore';
-import { DiscogsResult } from '../../src/types';
+import { useCamera } from '../../../src/hooks/useCamera';
+import { lookupByBarcode } from '../../../src/services/discogs';
+import { useCollectionStore } from '../../../src/store/collectionStore';
+import { DiscogsResult } from '../../../src/types';
 
 export default function ScanScreen() {
   const { hasPermission, isLoading, requestPermission, scanned, setScanned } = useCamera();
@@ -52,7 +52,7 @@ export default function ScanScreen() {
             },
             {
               text: 'Add Anyway',
-              onPress: () => navigateToManual(data, results),
+              onPress: () => { isProcessing.current = false; navigateToManual(data, results); },
             },
           ]
         );
@@ -102,7 +102,7 @@ export default function ScanScreen() {
         onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
       />
 
-      <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.overlay} edges={['bottom']}>
         <View style={styles.viewfinder}>
           <View style={styles.scanBox} />
           <Text style={styles.scanHint}>Align barcode within the frame</Text>

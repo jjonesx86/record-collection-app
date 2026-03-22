@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Record Collection",
+    "name": "Vinyly",
     "slug": "record_collection_app",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "recordcollection",
@@ -14,8 +14,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Used to scan vinyl record barcodes",
-        "NSPhotoLibraryUsageDescription": "Used to set your collection profile photo"
-      }
+        "NSPhotoLibraryUsageDescription": "Used to set your collection profile photo",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.jonesfamily.recordcollection"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +27,10 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -43,6 +48,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a9c63d3c-adc1-4f92-9ddf-ca06e87e1d63"
+      }
     }
   }
 }

@@ -1,43 +1,89 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Image, StyleSheet, Text, View } from 'react-native';
-import { router, useRootNavigationState } from 'expo-router';
+import { router, useRootNavigationState, Href } from 'expo-router';
 import { useCollectionStore } from '../src/store/collectionStore';
+import { getCurrentUser, fetchUserProfile } from '../src/services/supabase';
 
 export default function SplashScreen() {
-  const opacity = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.88)).current;
   const navigationState = useRootNavigationState();
   const navigated = useRef(false);
-  const collectionName = useCollectionStore((s) => s.collectionName);
-  const profileImageUri = useCollectionStore((s) => s.profileImageUri);
+  const setCollectionName = useCollectionStore((s) => s.setCollectionName);
+  const setProfileImageUri = useCollectionStore((s) => s.setProfileImageUri);
 
+  // Fade in + subtle scale up on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(opacity, { toValue: 0, duration: 600, useNativeDriver: true }).start();
-    }, 1800);
-    return () => clearTimeout(timer);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 700,
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        tension: 55,
+        friction: 9,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
+  // Fade out before navigating
+  useEffect(() => {
+    const fadeOut = setTimeout(() => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 450,
+        useNativeDriver: true,
+      }).start();
+    }, 2650);
+    return () => clearTimeout(fadeOut);
+  }, []);
+
+  // Navigate after 3.2 seconds total
   useEffect(() => {
     if (!navigationState?.key || navigated.current) return;
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       navigated.current = true;
-      router.replace('/collection');
-    }, 2600);
+      try {
+        const user = await getCurrentUser();
+        if (!user) {
+          router.replace('/auth/login' as Href);
+          return;
+        }
+        try {
+          const profile = await fetchUserProfile();
+          if (profile) {
+            setCollectionName(profile.collection_name);
+            setProfileImageUri(profile.profile_image_url);
+          }
+        } catch {
+          // proceed even if profile fetch fails
+        }
+        router.replace('/home');
+      } catch {
+        // Auth error (e.g. invalid/expired token) — treat as signed out
+        router.replace('/auth/login' as Href);
+      }
+    }, 3200);
     return () => clearTimeout(timer);
   }, [navigationState?.key]);
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.content, { opacity }]}>
-        {profileImageUri ? (
-          <Image source={{ uri: profileImageUri }} style={styles.profileImage} />
-        ) : (
-          <View style={styles.profilePlaceholder}>
-            <Text style={styles.vinyl}>🎵</Text>
-          </View>
-        )}
-        <Text style={styles.welcome}>Welcome to the</Text>
-        <Text style={styles.title}>{collectionName}</Text>
+
+        <Text style={styles.appName}>Vinyly</Text>
+
+        <Animated.Image
+          source={require('../assets/icon.png')}
+          style={[styles.logo, { transform: [{ scale: logoScale }] }]}
+          resizeMode="contain"
+        />
+
+        <Text style={styles.tagline}>Family Vinyl Collections</Text>
+
       </Animated.View>
     </View>
   );
@@ -52,39 +98,26 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
-    gap: 12,
+    gap: 0,
   },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 8,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  profilePlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  vinyl: {
+  appName: {
     fontSize: 44,
-  },
-  welcome: {
-    fontSize: 18,
-    color: '#AAA',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  title: {
-    fontSize: 32,
     fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-    lineHeight: 40,
+    color: '#ffffff',
+    letterSpacing: 2,
+    marginBottom: 28,
+  },
+  logo: {
+    width: 160,
+    height: 160,
+    borderRadius: 36,
+  },
+  tagline: {
+    marginTop: 24,
+    fontSize: 15,
+    fontWeight: '400',
+    color: 'rgba(255, 255, 255, 0.5)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 });
