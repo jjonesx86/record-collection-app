@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
+  SectionList,
   Image,
   StyleSheet,
   Text,
@@ -28,6 +28,16 @@ export default function HomeScreen() {
   const handlePress = useCallback((record: VinylRecord) => {
     router.push(`/collection/${record.id}`);
   }, []);
+
+  const collectionResults = results.filter((r) => !r.is_wishlist);
+  const wishlistResults = results.filter((r) => r.is_wishlist === true);
+
+  const sections = [
+    { title: 'Wish List', data: wishlistResults, isWishlist: true },
+    { title: 'My Collection', data: collectionResults, isWishlist: false },
+  ].filter((s) => s.data.length > 0);
+
+  const isEmpty = !isLoading && collectionResults.length === 0 && wishlistResults.length === 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -56,27 +66,41 @@ export default function HomeScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#5BB8FF" />
         </View>
-      ) : results.length === 0 ? (
+      ) : isEmpty ? (
         <View style={styles.centered}>
           <Text style={styles.emptyText}>
             {query ? `No records matching "${query}"` : 'No records yet. Tap + to add one!'}
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={results}
+        <SectionList
+          sections={sections}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <RecordCard record={item} onPress={() => handlePress(item)} />
           )}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Ionicons
+                name={section.isWishlist ? 'gift-outline' : 'disc-outline'}
+                size={16}
+                color={section.isWishlist ? '#F5A623' : '#ffffff'}
+              />
+              <Text style={[styles.sectionHeaderText, section.isWishlist && styles.sectionHeaderWishlist]}>
+                {section.title}
+              </Text>
+              <Text style={styles.sectionCount}>{section.data.length}</Text>
+            </View>
+          )}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           refreshControl={
             <RefreshControl refreshing={isLoading} onRefresh={refresh} tintColor="#5BB8FF" />
           }
           contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
         />
       )}
-
     </SafeAreaView>
   );
 }
@@ -133,6 +157,30 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#888',
     textAlign: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  sectionHeaderText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  sectionHeaderWishlist: {
+    color: '#F5A623',
+  },
+  sectionCount: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
   },
   list: {
     paddingBottom: 24,

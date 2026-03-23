@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VinylRecord } from '../types';
 
-interface CollectionState {
+export interface CollectionState {
   records: VinylRecord[];
   lastFetched: number | null;
   isLoading: boolean;
@@ -23,6 +23,7 @@ interface CollectionState {
   clearAll: () => void;
 
   hasDuplicate: (artist: string, album: string, excludeId?: string) => boolean;
+  hasWishlistDuplicate: (artist: string, album: string, excludeId?: string) => boolean;
 }
 
 export const useCollectionStore = create<CollectionState>()(
@@ -74,6 +75,19 @@ export const useCollectionStore = create<CollectionState>()(
         const lAlbum = album.toLowerCase().trim();
         return get().records.some(
           (r) =>
+            !r.is_wishlist &&
+            r.id !== excludeId &&
+            r.artist.toLowerCase().trim() === lArtist &&
+            r.album.toLowerCase().trim() === lAlbum
+        );
+      },
+
+      hasWishlistDuplicate: (artist, album, excludeId) => {
+        const lArtist = artist.toLowerCase().trim();
+        const lAlbum = album.toLowerCase().trim();
+        return get().records.some(
+          (r) =>
+            r.is_wishlist === true &&
             r.id !== excludeId &&
             r.artist.toLowerCase().trim() === lArtist &&
             r.album.toLowerCase().trim() === lAlbum

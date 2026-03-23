@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { AlbumArtImage } from '../../../src/components/AlbumArtImage';
 import { DiscogsResultsPicker } from '../../../src/components/DiscogsResultsPicker';
 import { useDiscogs } from '../../../src/hooks/useDiscogs';
@@ -23,6 +24,7 @@ import { insertRecord } from '../../../src/services/supabase';
 import { DiscogsResult } from '../../../src/types';
 
 type Params = {
+  destination?: 'collection' | 'wishlist';
   barcode?: string;
   prefillArtist?: string;
   prefillAlbum?: string;
@@ -33,8 +35,13 @@ type Params = {
   discogsResults?: string;
 };
 
+const WISHLIST_COLOR = '#F5A623';
+const COLLECTION_COLOR = '#007AFF';
+
 export default function ManualEntryScreen() {
   const params = useLocalSearchParams<Params>();
+  const destination = params.destination ?? 'collection';
+  const isWishlist = destination === 'wishlist';
 
   const [artist, setArtist] = useState(params.prefillArtist ?? '');
   const [album, setAlbum] = useState(params.prefillAlbum ?? '');
@@ -59,6 +66,10 @@ export default function ManualEntryScreen() {
 
   const addRecord = useCollectionStore((s) => s.addRecord);
   const hasDuplicate = useCollectionStore((s) => s.hasDuplicate);
+  const hasWishlistDuplicate = useCollectionStore((s) => s.hasWishlistDuplicate);
+
+  const checkDuplicate = isWishlist ? hasWishlistDuplicate : hasDuplicate;
+  const destLabel = isWishlist ? 'Wish List' : 'Collection';
 
   const handleSearch = () => {
     if (!artist.trim() && !album.trim()) {
@@ -81,11 +92,11 @@ export default function ManualEntryScreen() {
   };
 
   const handleSelectResult = (result: DiscogsResult) => {
-    if (result.artist && result.title && hasDuplicate(result.artist, result.title)) {
+    if (result.artist && result.title && checkDuplicate(result.artist, result.title)) {
       setPickerVisible(false);
       Alert.alert(
-        'Already in Collection',
-        `"${result.title}" by ${result.artist} is already in your collection.`,
+        `Already in ${destLabel}`,
+        `"${result.title}" by ${result.artist} is already in your ${destLabel.toLowerCase()}.`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Add Anyway', onPress: () => applyResult(result) },
@@ -102,10 +113,10 @@ export default function ManualEntryScreen() {
       return;
     }
 
-    if (hasDuplicate(artist, album)) {
+    if (checkDuplicate(artist, album)) {
       Alert.alert(
         'Duplicate Found',
-        `"${album}" by ${artist} is already in your collection. Save anyway?`,
+        `"${album}" by ${artist} is already in your ${destLabel.toLowerCase()}. Save anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
           { text: 'Save Anyway', onPress: () => doSave() },
@@ -128,9 +139,10 @@ export default function ManualEntryScreen() {
         label: label.trim() || undefined,
         album_art_url: artUrl.trim() || undefined,
         discogs_id: discogsId || undefined,
+        is_wishlist: isWishlist,
       });
       addRecord(newRecord);
-      Alert.alert('Saved!', `"${album}" added to your collection.`, [
+      Alert.alert('Saved!', `"${album}" added to your ${destLabel.toLowerCase()}.`, [
         { text: 'OK', onPress: () => router.push('/home') },
       ]);
     } catch (e) {
@@ -140,6 +152,8 @@ export default function ManualEntryScreen() {
     }
   };
 
+  const accentColor = isWishlist ? WISHLIST_COLOR : COLLECTION_COLOR;
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <KeyboardAvoidingView
@@ -147,12 +161,24 @@ export default function ManualEntryScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
           {artUrl ? (
             <View style={styles.artPreview}>
               <AlbumArtImage uri={artUrl} size={120} style={styles.art} />
             </View>
           ) : null}
+
+          {/* Destination badge */}
+          <View style={[styles.destBadge, { borderColor: accentColor }]}>
+            <Ionicons
+              name={isWishlist ? 'gift-outline' : 'disc-outline'}
+              size={14}
+              color={accentColor}
+            />
+            <Text style={[styles.destBadgeText, { color: accentColor }]}>
+              Adding to: {destLabel}
+            </Text>
+          </View>
 
           <Field label="Artist *" value={artist} onChangeText={setArtist} placeholder="e.g. The Beatles" />
           <Field label="Album *" value={album} onChangeText={setAlbum} placeholder="e.g. Abbey Road" />
@@ -160,8 +186,12 @@ export default function ManualEntryScreen() {
           <Field label="Year" value={year} onChangeText={setYear} placeholder="e.g. 1969" keyboardType="number-pad" />
           <Field label="Label" value={label} onChangeText={setLabel} placeholder="e.g. Apple Records" />
 
-          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} activeOpacity={0.8}>
-            <Text style={styles.searchBtnText}>Search Discogs</Text>
+          <TouchableOpacity
+            style={[styles.searchBtn, { borderColor: accentColor }]}
+            onPress={handleSearch}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.searchBtnText, { color: accentColor }]}>Search Discogs</Text>
           </TouchableOpacity>
 
           {params.barcode ? (
@@ -169,7 +199,7 @@ export default function ManualEntryScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+            style={[styles.saveBtn, { backgroundColor: accentColor }, saving && styles.saveBtnDisabled]}
             onPress={handleSave}
             disabled={saving}
             activeOpacity={0.8}
@@ -177,7 +207,9 @@ export default function ManualEntryScreen() {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.saveBtnText}>Add to Collection</Text>
+              <Text style={styles.saveBtnText}>
+                {isWishlist ? 'Add to Wish List' : 'Add to Collection'}
+              </Text>
             )}
           </TouchableOpacity>
         </ScrollView>
@@ -246,6 +278,20 @@ const styles = StyleSheet.create({
   art: {
     borderRadius: 8,
   },
+  destBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  destBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
   field: {
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -268,14 +314,12 @@ const styles = StyleSheet.create({
   searchBtn: {
     backgroundColor: '#F2F2F7',
     borderWidth: 1.5,
-    borderColor: '#007AFF',
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
   },
   searchBtnText: {
-    color: '#007AFF',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -285,7 +329,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   saveBtn: {
-    backgroundColor: '#007AFF',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

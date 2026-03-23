@@ -16,7 +16,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCollectionStore } from '../../src/store/collectionStore';
-import { deleteRecord, updateRecord } from '../../src/services/supabase';
+import { deleteRecord, moveToCollection, updateRecord } from '../../src/services/supabase';
 import { findAlbumArt } from '../../src/services/discogs';
 import { AlbumArtImage } from '../../src/components/AlbumArtImage';
 
@@ -30,6 +30,7 @@ export default function RecordDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [refreshingArt, setRefreshingArt] = useState(false);
+  const [movingToCollection, setMovingToCollection] = useState(false);
 
   // Edit form state — initialised from record when edit mode opens
   const [artist, setArtist] = useState('');
@@ -94,9 +95,10 @@ export default function RecordDetailScreen() {
   };
 
   const handleDelete = () => {
+    const dest = record.is_wishlist ? 'wish list' : 'collection';
     Alert.alert(
       'Delete Record',
-      `Remove "${record.album}" by ${record.artist} from your collection?`,
+      `Remove "${record.album}" by ${record.artist} from your ${dest}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -111,6 +113,39 @@ export default function RecordDetailScreen() {
             } catch (e) {
               Alert.alert('Error', 'Failed to delete record. Try again.');
               setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMoveToCollection = () => {
+    const hasDuplicate = useCollectionStore.getState().hasDuplicate;
+    if (hasDuplicate(record.artist, record.album, record.id)) {
+      Alert.alert(
+        'Already in Collection',
+        `"${record.album}" by ${record.artist} is already in your collection.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    Alert.alert(
+      'I bought this!',
+      `Move "${record.album}" to your collection?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Move',
+          onPress: async () => {
+            setMovingToCollection(true);
+            try {
+              await moveToCollection(record.id);
+              updateStoreRecord(record.id, { is_wishlist: false });
+              router.back();
+            } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to move record.');
+              setMovingToCollection(false);
             }
           },
         },
@@ -143,7 +178,7 @@ export default function RecordDetailScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={styles.editContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+          <ScrollView contentContainerStyle={styles.editContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
             <View style={styles.editHeader}>
               <TouchableOpacity onPress={cancelEdit} style={styles.editHeaderBtn}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -200,6 +235,20 @@ export default function RecordDetailScreen() {
           </View>
         </View>
 
+        {record.is_wishlist && (
+          <TouchableOpacity
+            style={[styles.buyButton, movingToCollection && styles.disabled]}
+            onPress={handleMoveToCollection}
+            disabled={movingToCollection}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+            <Text style={styles.buyButtonText}>
+              {movingToCollection ? 'Moving…' : 'I bought this!'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.editButton} onPress={openEdit} activeOpacity={0.8}>
           <Ionicons name="pencil-outline" size={18} color="#007AFF" />
           <Text style={styles.editButtonText}>Edit Details</Text>
@@ -211,7 +260,9 @@ export default function RecordDetailScreen() {
           disabled={deleting}
         >
           <Ionicons name="trash-outline" size={18} color="#FF3B30" />
-          <Text style={styles.deleteText}>{deleting ? 'Deleting…' : 'Remove from Collection'}</Text>
+          <Text style={styles.deleteText}>
+            {deleting ? 'Deleting…' : `Remove from ${record.is_wishlist ? 'Wish List' : 'Collection'}`}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -295,6 +346,19 @@ const styles = StyleSheet.create({
   },
   metaLabel: { fontSize: 14, color: '#888', fontWeight: '500' },
   metaValue: { fontSize: 14, color: '#111', fontWeight: '500', textAlign: 'right', flex: 1, paddingLeft: 12 },
+
+  buyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: '#34C759',
+    width: '100%',
+    justifyContent: 'center',
+  },
+  buyButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
   editButton: {
     flexDirection: 'row',

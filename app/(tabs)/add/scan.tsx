@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Alert, ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CameraView } from 'expo-camera';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCamera } from '../../../src/hooks/useCamera';
@@ -9,16 +9,25 @@ import { lookupByBarcode } from '../../../src/services/discogs';
 import { useCollectionStore } from '../../../src/store/collectionStore';
 import { DiscogsResult } from '../../../src/types';
 
+type Params = {
+  destination?: 'collection' | 'wishlist';
+};
+
 export default function ScanScreen() {
+  const { destination = 'collection' } = useLocalSearchParams<Params>();
   const { hasPermission, isLoading, requestPermission, scanned, setScanned } = useCamera();
   const isProcessing = useRef(false);
   const hasDuplicate = useCollectionStore((s) => s.hasDuplicate);
+  const hasWishlistDuplicate = useCollectionStore((s) => s.hasWishlistDuplicate);
+
+  const checkDuplicate = destination === 'wishlist' ? hasWishlistDuplicate : hasDuplicate;
 
   const navigateToManual = (data: string, results: DiscogsResult[]) => {
     const first = results[0];
     router.push({
       pathname: '/add/manual',
       params: {
+        destination,
         barcode: data,
         prefillArtist: first?.artist ?? '',
         prefillAlbum: first?.title ?? '',
@@ -40,10 +49,11 @@ export default function ScanScreen() {
       const results = await lookupByBarcode(data);
       const first: DiscogsResult | undefined = results[0];
 
-      if (first?.artist && first?.title && hasDuplicate(first.artist, first.title)) {
+      if (first?.artist && first?.title && checkDuplicate(first.artist, first.title)) {
+        const dest = destination === 'wishlist' ? 'wish list' : 'collection';
         Alert.alert(
-          'Already in Collection',
-          `"${first.title}" by ${first.artist} is already in your collection.`,
+          `Already in ${destination === 'wishlist' ? 'Wish List' : 'Collection'}`,
+          `"${first.title}" by ${first.artist} is already in your ${dest}.`,
           [
             {
               text: 'Cancel',
@@ -62,7 +72,7 @@ export default function ScanScreen() {
       navigateToManual(data, results);
     } catch {
       isProcessing.current = false;
-      router.push({ pathname: '/add/manual', params: { barcode: data } });
+      router.push({ pathname: '/add/manual', params: { destination, barcode: data } });
     }
   };
 
@@ -83,7 +93,10 @@ export default function ScanScreen() {
           <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
             <Text style={styles.permissionBtnText}>Allow Camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.manualLink} onPress={() => router.push('/add/manual')}>
+          <TouchableOpacity
+            style={styles.manualLink}
+            onPress={() => router.push({ pathname: '/add/manual', params: { destination } })}
+          >
             <Text style={styles.manualLinkText}>Enter manually instead</Text>
           </TouchableOpacity>
         </View>
@@ -114,7 +127,10 @@ export default function ScanScreen() {
               <Text style={styles.actionBtnText}>Scan Again</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.manualBtn} onPress={() => router.push('/add/manual')}>
+          <TouchableOpacity
+            style={styles.manualBtn}
+            onPress={() => router.push({ pathname: '/add/manual', params: { destination } })}
+          >
             <Text style={styles.manualBtnText}>Can't scan? Enter manually</Text>
           </TouchableOpacity>
         </View>

@@ -11,6 +11,7 @@ create table if not exists records (
   discogs_id     text,
   year           integer,
   label          text,
+  is_wishlist    boolean not null default false,
   created_at     timestamptz default now(),
   updated_at     timestamptz default now()
 );
@@ -20,9 +21,9 @@ create index if not exists records_artist_trgm on records using gin (artist gin_
 create index if not exists records_album_trgm  on records using gin (album  gin_trgm_ops);
 create index if not exists records_genre_trgm  on records using gin (genre  gin_trgm_ops);
 
--- Per-user unique constraint for duplicate detection
-create unique index if not exists records_user_artist_album_unique
-  on records (user_id, lower(artist), lower(album));
+-- Per-user unique constraint for duplicate detection (includes is_wishlist so same album can exist in both)
+create unique index if not exists records_user_artist_album_wishlist_unique
+  on records (user_id, lower(artist), lower(album), is_wishlist);
 
 -- Auto-update updated_at on row changes
 create or replace function update_updated_at()
@@ -57,3 +58,9 @@ alter table user_profiles enable row level security;
 create policy "select own profile" on user_profiles for select using (auth.uid() = user_id);
 create policy "insert own profile" on user_profiles for insert with check (auth.uid() = user_id);
 create policy "update own profile" on user_profiles for update using (auth.uid() = user_id);
+
+-- ── Migration: add wish list support (run in Supabase SQL Editor on existing DB) ──
+-- ALTER TABLE records ADD COLUMN IF NOT EXISTS is_wishlist BOOLEAN NOT NULL DEFAULT false;
+-- DROP INDEX IF EXISTS records_user_artist_album_unique;
+-- CREATE UNIQUE INDEX IF NOT EXISTS records_user_artist_album_wishlist_unique
+--   ON records (user_id, lower(artist), lower(album), is_wishlist);

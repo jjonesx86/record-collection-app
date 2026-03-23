@@ -195,6 +195,10 @@ export async function updateRecord(id: string, updates: Partial<VinylRecord>): P
   return data;
 }
 
+export async function moveToCollection(id: string): Promise<VinylRecord> {
+  return updateRecord(id, { is_wishlist: false });
+}
+
 export async function deleteRecord(id: string): Promise<void> {
   const { error } = await db()
     .from('records')

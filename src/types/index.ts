@@ -7,6 +7,7 @@ export interface VinylRecord {
   discogs_id?: string;
   year?: number;
   label?: string;
+  is_wishlist?: boolean;
   created_at?: string;
   updated_at?: string;
 }
