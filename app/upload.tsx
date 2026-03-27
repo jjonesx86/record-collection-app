@@ -13,6 +13,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
+import { Linking } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { readAsText } from '../src/services/fileSystem';
@@ -587,6 +589,31 @@ export default function SettingsScreen() {
           <View style={styles.sectionDivider} />
           <TouchableOpacity style={styles.actionRow} onPress={handleUpdatePassword} activeOpacity={0.7}>
             <Text style={styles.actionText}>Update Password</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionLabel}>ABOUT VINYLY</Text>
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.sectionRow} onPress={() => router.push('/privacy' as any)} activeOpacity={0.7}>
+            <Ionicons name="shield-checkmark-outline" size={20} color="#007AFF" style={styles.rowIcon} />
+            <Text style={styles.sectionRowText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+          </TouchableOpacity>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity style={styles.sectionRow} onPress={() => router.push('/terms' as any)} activeOpacity={0.7}>
+            <Ionicons name="document-text-outline" size={20} color="#007AFF" style={styles.rowIcon} />
+            <Text style={styles.sectionRowText}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={16} color="#C7C7CC" />
+          </TouchableOpacity>
+          <View style={styles.sectionDivider} />
+          <TouchableOpacity
+            style={styles.sectionRow}
+            onPress={() => Linking.openURL('https://expo.dev/accounts/jjonesx86/projects/record_collection_app/builds/c8b49a3b-ff27-46c3-bc78-99b3905a522e')}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="logo-android" size={20} color="#007AFF" style={styles.rowIcon} />
+            <Text style={styles.sectionRowText}>Latest Android Build</Text>
+            <Ionicons name="open-outline" size={16} color="#C7C7CC" />
           </TouchableOpacity>
         </View>
 
