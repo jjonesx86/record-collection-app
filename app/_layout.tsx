@@ -15,19 +15,21 @@ export default function RootLayout() {
   const initialised = useRef(false);
 
   useEffect(() => {
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION' && Platform.OS === 'web') {
         const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
         // Only reroute from the root or auth pages — if already in the app, do nothing
-        if (session && (pathname === '/' || pathname.startsWith('/auth'))) {
-          try {
-            const profile = await fetchUserProfileById(session.user.id);
-            if (profile) {
-              useCollectionStore.getState().setCollectionName(profile.collection_name);
-              useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
-            }
-          } catch { /* proceed */ }
+        if (session?.user && (pathname === '/' || pathname.startsWith('/auth'))) {
+          // Navigate immediately; fetch profile in the background so we never block this callback
           router.replace('/home' as Href);
+          fetchUserProfileById(session.user.id)
+            .then(profile => {
+              if (profile) {
+                useCollectionStore.getState().setCollectionName(profile.collection_name);
+                useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+              }
+            })
+            .catch(() => {});
         } else if (!session && !pathname.startsWith('/auth')) {
           router.replace('/auth/login' as Href);
         }
@@ -36,14 +38,16 @@ export default function RootLayout() {
       }
 
       if (event === 'SIGNED_IN' && Platform.OS === 'web') {
+        // Fetch profile in the background — never await inside this callback
         if (session?.user) {
-          try {
-            const profile = await fetchUserProfileById(session.user.id);
-            if (profile) {
-              useCollectionStore.getState().setCollectionName(profile.collection_name);
-              useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
-            }
-          } catch { /* proceed */ }
+          fetchUserProfileById(session.user.id)
+            .then(profile => {
+              if (profile) {
+                useCollectionStore.getState().setCollectionName(profile.collection_name);
+                useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+              }
+            })
+            .catch(() => {});
         }
         const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
         if (pathname === '/' || pathname.startsWith('/auth')) {
