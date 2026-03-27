@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,7 +13,8 @@ import {
 } from 'react-native';
 import { router, Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { signIn } from '../../src/services/supabase';
+import { signIn, fetchUserProfile } from '../../src/services/supabase';
+import { useCollectionStore } from '../../src/store/collectionStore';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -29,10 +31,19 @@ export default function LoginScreen() {
     setError(null);
     try {
       await signIn(email.trim(), password);
-      router.replace('/' as Href);
+      if (Platform.OS !== 'web') {
+        try {
+          const profile = await fetchUserProfile();
+          if (profile) {
+            useCollectionStore.getState().setCollectionName(profile.collection_name);
+            useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+          }
+        } catch { /* proceed */ }
+        router.replace('/home' as Href);
+      }
+      // Web: leave loading=true until _layout.tsx SIGNED_IN event navigates (and fetches profile)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Sign in failed.');
-    } finally {
       setLoading(false);
     }
   };
@@ -40,61 +51,71 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        style={styles.inner}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.header}>
-          <Text style={styles.vinyl}>🎵</Text>
-          <Text style={styles.title}>Record Collection</Text>
-          <Text style={styles.subtitle}>Sign in to your collection</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.inner}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={styles.appName}>Vinyly</Text>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.tagline}>Family Vinyl Collections</Text>
+          </View>
 
-        <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#AAA"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoCorrect={false}
-            textContentType="emailAddress"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#AAA"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="password"
-          />
+          <View style={styles.form}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#888"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+              textContentType="emailAddress"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#888"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="password"
+            />
 
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <TouchableOpacity
+              style={[styles.primaryBtn, loading && styles.btnDisabled]}
+              onPress={handleSignIn}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
-            style={[styles.primaryBtn, loading && styles.btnDisabled]}
-            onPress={handleSignIn}
-            disabled={loading}
-            activeOpacity={0.8}
+            style={styles.linkBtn}
+            onPress={() => router.push('/auth/signup' as Href)}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Sign In</Text>
-            )}
+            <Text style={styles.linkText}>
+              Don't have an account?{'  '}
+              <Text style={styles.linkBold}>Create one</Text>
+            </Text>
           </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.linkBtn}
-          onPress={() => router.push('/auth/signup' as Href)}
-        >
-          <Text style={styles.linkText}>
-            Don't have an account? <Text style={styles.linkBold}>Create one</Text>
-          </Text>
-        </TouchableOpacity>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -102,12 +123,34 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111' },
-  inner: { flex: 1, justifyContent: 'center', padding: 24, gap: 32 },
+  flex: { flex: 1 },
+  inner: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 24,
+    gap: 40,
+  },
 
-  header: { alignItems: 'center', gap: 8 },
-  vinyl: { fontSize: 56 },
-  title: { fontSize: 28, fontWeight: '700', color: '#fff' },
-  subtitle: { fontSize: 15, color: '#AAA' },
+  header: { alignItems: 'center' },
+  appName: {
+    fontSize: 44,
+    fontWeight: '700',
+    color: '#ffffff',
+    letterSpacing: 2,
+    marginBottom: 20,
+  },
+  logo: {
+    width: 120,
+    height: 120,
+    borderRadius: 27,
+  },
+  tagline: {
+    marginTop: 20,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
 
   form: { gap: 12 },
   input: {
@@ -118,7 +161,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#2C2C2E',
   },
   errorText: { fontSize: 14, color: '#FF453A', textAlign: 'center' },
 
@@ -133,6 +176,6 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
 
   linkBtn: { alignItems: 'center' },
-  linkText: { fontSize: 15, color: '#AAA' },
+  linkText: { fontSize: 15, color: 'rgba(255,255,255,0.45)' },
   linkBold: { color: '#007AFF', fontWeight: '600' },
 });
