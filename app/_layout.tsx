@@ -38,7 +38,7 @@ export default function RootLayout() {
       if (event === 'SIGNED_IN' && Platform.OS === 'web') {
         const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
         if (pathname === '/' || pathname.startsWith('/auth')) {
-          webRedirect('/home');
+          router.replace('/home' as Href);
         }
         return;
       }
