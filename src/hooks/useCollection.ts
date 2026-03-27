@@ -35,9 +35,11 @@ export function useCollection() {
   // InteractionManager defers the fetch until any in-progress navigation animation completes.
   useFocusEffect(
     useCallback(() => {
-      const { lastFetched, isLoading: loading } = useCollectionStore.getState();
+      const { lastFetched, isLoading: loading, records } = useCollectionStore.getState();
       const isStale = !lastFetched || Date.now() - lastFetched > CACHE_TTL_MS;
-      if (isStale && !loading) {
+      // Also refresh if records are empty despite a prior fetch (e.g. auth race on web)
+      const isEmpty = records.length === 0 && !!lastFetched;
+      if ((isStale || isEmpty) && !loading) {
         const task = InteractionManager.runAfterInteractions(() => {
           refresh();
         });

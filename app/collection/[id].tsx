@@ -29,6 +29,7 @@ export default function RecordDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [refreshingArt, setRefreshingArt] = useState(false);
   const [movingToCollection, setMovingToCollection] = useState(false);
 
@@ -41,11 +42,26 @@ export default function RecordDetailScreen() {
 
   const navigation = useNavigation();
 
-  // Disable back button and swipe gesture while editing
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/home');
+    }
+  };
+
+  // On web: always render a custom back button with /home fallback (no navigation history after refresh).
+  // On native: restore the system back button — native always has proper navigation history.
   useEffect(() => {
     navigation.setOptions({
       gestureEnabled: !editing,
-      headerBackVisible: !editing,
+      headerBackVisible: Platform.OS !== 'web' ? !editing : false,
+      headerLeft: Platform.OS !== 'web' || editing ? undefined : () => (
+        <TouchableOpacity onPress={goBack} style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -8 }}>
+          <Ionicons name="chevron-back" size={28} color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 17, marginLeft: -4 }}>Collection</Text>
+        </TouchableOpacity>
+      ),
     });
   }, [editing, navigation]);
 
@@ -95,29 +111,45 @@ export default function RecordDetailScreen() {
   };
 
   const handleDelete = () => {
-    const dest = record.is_wishlist ? 'wish list' : 'collection';
-    Alert.alert(
-      'Delete Record',
-      `Remove "${record.album}" by ${record.artist} from your ${dest}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await deleteRecord(record.id);
-              removeRecord(record.id);
-              router.back();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete record. Try again.');
-              setDeleting(false);
-            }
+    if (Platform.OS !== 'web') {
+      const dest = record.is_wishlist ? 'wish list' : 'collection';
+      Alert.alert(
+        'Delete Record',
+        `Remove "${record.album}" by ${record.artist} from your ${dest}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setDeleting(true);
+              try {
+                await deleteRecord(record.id);
+                removeRecord(record.id);
+                router.back();
+              } catch (e) {
+                Alert.alert('Error', 'Failed to delete record. Try again.');
+                setDeleting(false);
+              }
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    } else {
+      setConfirmDelete(true);
+    }
+  };
+
+  const doDelete = async () => {
+    setConfirmDelete(false);
+    setDeleting(true);
+    try {
+      await deleteRecord(record.id);
+      removeRecord(record.id);
+      router.back();
+    } catch {
+      setDeleting(false);
+    }
   };
 
   const handleMoveToCollection = () => {
@@ -177,7 +209,7 @@ export default function RecordDetailScreen() {
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardDismissWrapper>
           <ScrollView contentContainerStyle={styles.editContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
             <View style={styles.editHeader}>
               <TouchableOpacity onPress={cancelEdit} style={styles.editHeaderBtn}>
@@ -199,7 +231,7 @@ export default function RecordDetailScreen() {
             <EditField label="Year" value={year} onChangeText={setYear} placeholder="e.g. 1969" keyboardType="number-pad" />
             <EditField label="Label" value={label} onChangeText={setLabel} placeholder="e.g. Apple Records" />
           </ScrollView>
-          </TouchableWithoutFeedback>
+          </KeyboardDismissWrapper>
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
@@ -265,7 +297,33 @@ export default function RecordDetailScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {confirmDelete && (
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmBox}>
+            <Text style={styles.confirmTitle}>Remove from {record.is_wishlist ? 'Wish List' : 'Collection'}?</Text>
+            <Text style={styles.confirmMsg}>"{record.album}" by {record.artist} will be removed.</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} onPress={() => setConfirmDelete(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmDelete} onPress={doDelete}>
+                <Text style={styles.confirmDeleteText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
+  );
+}
+
+function KeyboardDismissWrapper({ children }: { children: React.ReactElement }) {
+  if (Platform.OS === 'web') return children;
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      {children}
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -416,5 +474,19 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: 4,
   },
-  fieldInput: { fontSize: 17, color: '#111' },
+  fieldInput: { fontSize: 17, color: '#111', paddingVertical: 6, minHeight: 36 },
+  confirmOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 32,
+  },
+  confirmBox: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 24, width: '100%', maxWidth: 400, gap: 12,
+  },
+  confirmTitle: { fontSize: 17, fontWeight: '700', color: '#111' },
+  confirmMsg: { fontSize: 15, color: '#444' },
+  confirmActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 4 },
+  confirmCancel: { paddingVertical: 10, paddingHorizontal: 16 },
+  confirmCancelText: { color: '#007AFF', fontSize: 16 },
+  confirmDelete: { paddingVertical: 10, paddingHorizontal: 16 },
+  confirmDeleteText: { color: '#FF3B30', fontSize: 16, fontWeight: '600' },
 });

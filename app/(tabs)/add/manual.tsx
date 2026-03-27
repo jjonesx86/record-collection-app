@@ -59,6 +59,16 @@ export default function ManualEntryScreen() {
     if (params.discogsResults) {
       try { return JSON.parse(params.discogsResults); } catch { return []; }
     }
+    // Web fallback: results stored in sessionStorage to avoid URL length limits
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('pendingScanResults');
+        if (stored) {
+          sessionStorage.removeItem('pendingScanResults');
+          return JSON.parse(stored);
+        }
+      } catch { /* ignore */ }
+    }
     return [];
   });
 
@@ -160,7 +170,7 @@ export default function ManualEntryScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardDismissWrapper>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
           {artUrl ? (
             <View style={styles.artPreview}>
@@ -213,7 +223,7 @@ export default function ManualEntryScreen() {
             )}
           </TouchableOpacity>
         </ScrollView>
-        </TouchableWithoutFeedback>
+        </KeyboardDismissWrapper>
       </KeyboardAvoidingView>
 
       <DiscogsResultsPicker
@@ -225,6 +235,15 @@ export default function ManualEntryScreen() {
         onClose={() => setPickerVisible(false)}
       />
     </SafeAreaView>
+  );
+}
+
+function KeyboardDismissWrapper({ children }: { children: React.ReactElement }) {
+  if (Platform.OS === 'web') return children;
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      {children}
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -310,6 +329,8 @@ const styles = StyleSheet.create({
   fieldInput: {
     fontSize: 17,
     color: '#111',
+    paddingVertical: 6,
+    minHeight: 36,
   },
   searchBtn: {
     backgroundColor: '#F2F2F7',

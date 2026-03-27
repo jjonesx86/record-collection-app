@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack, router, Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { onAuthStateChange } from '../src/services/supabase';
@@ -11,7 +12,11 @@ export default function RootLayout() {
     const { data: { subscription } } = onAuthStateChange((event, _session) => {
       if (event === 'SIGNED_OUT') {
         useCollectionStore.getState().clearAll();
-        router.replace('/auth/login' as Href);
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        } else {
+          router.replace('/auth/login' as Href);
+        }
       }
     });
     return () => subscription.unsubscribe();
@@ -32,6 +37,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="collection/[id]" options={{ title: 'Record Details', headerBackTitle: 'Collection' }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false }} />
+        <Stack.Screen name="terms" options={{ headerShown: false }} />
       </Stack>
     </>
   );

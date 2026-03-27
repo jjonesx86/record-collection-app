@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from './storage';
 import { VinylRecord } from '../types';
 
 export interface CollectionState {
@@ -96,7 +96,7 @@ export const useCollectionStore = create<CollectionState>()(
     }),
     {
       name: 'record-collection-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => storage),
     }
   )
 );

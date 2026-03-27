@@ -9,6 +9,11 @@ const HEADERS = {
   'Authorization': `Discogs token=${TOKEN}`,
 };
 
+function toHttps(url?: string): string | undefined {
+  if (!url) return undefined;
+  return url.replace(/^http:\/\//i, 'https://');
+}
+
 function isValidArtUrl(url?: string): boolean {
   if (!url) return false;
   if (!url.startsWith('https://')) return false;
@@ -55,7 +60,7 @@ function mapResult(raw: DiscogsRawResult): DiscogsResult {
     artist,
     year: raw.year ? parseInt(raw.year, 10) : undefined,
     label: raw.label?.[0],
-    thumb: raw.thumb,
+    thumb: toHttps(raw.thumb),
     cover_image: cover,
     genre: raw.genre,
     style: raw.style,
@@ -80,6 +85,27 @@ async function fetchSearch(params: URLSearchParams): Promise<DiscogsResult[]> {
   return data.results.map(mapResult);
 }
 
+// Discogs search results often return empty cover_image/thumb. Fetch release
+// details for the first 5 imageless results to get actual artwork.
+async function enrichWithImages(results: DiscogsResult[]): Promise<DiscogsResult[]> {
+  const needsEnrichment = results.slice(0, 3).every(r => !r.cover_image);
+  if (!needsEnrichment) return results;
+
+  const enriched = await Promise.all(
+    results.slice(0, 15).map(async (result) => {
+      if (result.cover_image) return result;
+      try {
+        const details = await fetchReleaseDetails(result.discogs_id);
+        return details.cover_image ? { ...result, cover_image: details.cover_image } : result;
+      } catch {
+        return result;
+      }
+    })
+  );
+
+  return [...enriched, ...results.slice(15)];
+}
+
 async function searchWithVinylFallback(query: { artist?: string; album?: string }): Promise<DiscogsResult[]> {
   const artist = query.artist ? normalizeSearchTerm(query.artist) : undefined;
   const album = query.album ? normalizeSearchTerm(query.album) : undefined;
@@ -93,14 +119,14 @@ async function searchWithVinylFallback(query: { artist?: string; album?: string 
 
   // 1. US vinyl pressings first
   const usVinyl = await fetchSearch(buildParams({ format: 'Vinyl', country: 'US' }));
-  if (usVinyl.length > 0) return usVinyl;
+  if (usVinyl.length > 0) return enrichWithImages(usVinyl);
 
   // 2. Any country vinyl
   const anyVinyl = await fetchSearch(buildParams({ format: 'Vinyl' }));
-  if (anyVinyl.length > 0) return anyVinyl;
+  if (anyVinyl.length > 0) return enrichWithImages(anyVinyl);
 
   // 3. Any format (some vinyl releases are miscategorised on Discogs)
-  return fetchSearch(buildParams({}));
+  return enrichWithImages(await fetchSearch(buildParams({})));
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;

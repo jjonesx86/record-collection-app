@@ -20,6 +20,7 @@
       "bundleIdentifier": "com.jonesfamily.recordcollection"
     },
     "android": {
+      "package": "com.jonesfamily.recordcollection",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -35,7 +36,10 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "Vinyly",
+      "shortName": "Vinyly",
+      "description": "Your family vinyl record collection"
     },
     "plugins": [
       "expo-router",
@@ -44,7 +48,8 @@
         {
           "cameraPermission": "Used to scan vinyl record barcodes"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,6 +1,7 @@
 import { createClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system/legacy';
+import { readAsBase64 } from './fileSystem';
 import { VinylRecord } from '../types';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
@@ -16,10 +17,10 @@ function db(): any {
     }
     _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        storage: AsyncStorage,
+        storage: Platform.OS === 'web' ? undefined : AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        detectSessionInUrl: Platform.OS === 'web',
       },
     });
   }
@@ -133,9 +134,7 @@ export async function uploadProfileImage(uri: string): Promise<string> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
-  const base64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
+  const base64 = await readAsBase64(uri);
 
   // Decode base64 to ArrayBuffer
   const binary = atob(base64);
@@ -153,7 +152,7 @@ export async function uploadProfileImage(uri: string): Promise<string> {
   if (error) throw error;
 
   const { data } = db().storage.from('profile-images').getPublicUrl(path);
-  return data.publicUrl;
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 // ── Records ───────────────────────────────────────────────────────────────────

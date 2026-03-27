@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -19,6 +20,7 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
+          ...Platform.select({ web: { fontSize: 10 } }),
         },
       }}
     >
@@ -26,7 +28,7 @@ export default function TabLayout() {
         name="home"
         options={{
           headerShown: false,
-          tabBarLabel: 'My Collection',
+          tabBarLabel: Platform.select({ web: 'Collection', default: 'My Collection' }),
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="disc-outline" size={size} color={color} />
           ),

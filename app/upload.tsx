@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import { readAsText } from '../src/services/fileSystem';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { parseCsv, ImportPreview } from '../src/services/csvImport';
@@ -60,6 +60,7 @@ export default function SettingsScreen() {
   const [emailInput, setEmailInput] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => {
     getCurrentUser()
@@ -93,11 +94,15 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = async () => {
+    if (Platform.OS === 'web') {
+      if (!window.confirm('Remove your profile photo?')) return;
+      try { await updateUserProfile({ profile_image_url: null }); } catch { /* ignore */ }
+      setProfileImageUri(null);
+      return;
+    }
     Alert.alert('Remove Photo', 'Remove your profile photo from the splash screen?', [
-      {
-        text: 'Cancel', style: 'cancel',
-      },
+      { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
         style: 'destructive',
@@ -170,23 +175,36 @@ export default function SettingsScreen() {
 
   // ── Sign out ─────────────────────────────────────────────────────
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await signOut();
-          } catch (e) {
-            Alert.alert('Error', e instanceof Error ? e.message : 'Failed to sign out.');
-          }
+    if (Platform.OS !== 'web') {
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try { await signOut(); } catch (e) {
+              Alert.alert('Error', e instanceof Error ? e.message : 'Failed to sign out.');
+            }
+          },
         },
-      },
-    ]);
+      ]);
+      return;
+    }
+    setConfirmSignOut(true);
   };
 
   const handleDeleteCatalog = () => {
+    if (Platform.OS === 'web') {
+      if (!window.confirm('This will permanently delete all records in your collection. This cannot be undone.')) return;
+      if (!window.confirm('Are you absolutely sure? There is no way to recover your catalog.')) return;
+      deleteAllUserRecords()
+        .then(() => {
+          useCollectionStore.getState().setRecords([]);
+          useCollectionStore.getState().setLastFetched(0);
+        })
+        .catch(() => {});
+      return;
+    }
     Alert.alert(
       'Delete Catalog',
       'This will permanently delete all records in your collection. This cannot be undone.',
@@ -233,9 +251,7 @@ export default function SettingsScreen() {
       if (result.canceled) return;
 
       const asset = result.assets[0];
-      const csvText = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      const csvText = await readAsText(asset.uri);
       const parsed = parseCsv(csvText);
 
       if (parsed.errors.length > 0) {
@@ -583,6 +599,26 @@ export default function SettingsScreen() {
 
       </ScrollView>
       </KeyboardAvoidingView>
+
+      {confirmSignOut && (
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmBox}>
+            <Text style={styles.confirmTitle}>Sign Out</Text>
+            <Text style={styles.confirmMsg}>Are you sure you want to sign out?</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} onPress={() => setConfirmSignOut(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmDestructive} onPress={async () => {
+                setConfirmSignOut(false);
+                try { await signOut(); } catch { /* _layout handles redirect */ }
+              }}>
+                <Text style={styles.confirmDestructiveText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -760,9 +796,32 @@ const styles = StyleSheet.create({
   doneSub: { fontSize: 15, color: '#666', textAlign: 'center' },
 
   mono: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
     fontSize: 12,
     color: '#333',
   },
   signOutText: { color: '#FF3B30' },
+
+  confirmOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center', padding: 32,
+  },
+  confirmBox: {
+    backgroundColor: '#fff', borderRadius: 14, padding: 24,
+    width: '100%', maxWidth: 320, gap: 12,
+  },
+  confirmTitle: { fontSize: 17, fontWeight: '700', color: '#111', textAlign: 'center' },
+  confirmMsg: { fontSize: 15, color: '#444', textAlign: 'center', lineHeight: 22 },
+  confirmActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  confirmCancel: {
+    flex: 1, paddingVertical: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: '#E5E5EA', alignItems: 'center',
+  },
+  confirmCancelText: { fontSize: 16, color: '#007AFF' },
+  confirmDestructive: {
+    flex: 1, paddingVertical: 12, borderRadius: 10,
+    backgroundColor: '#FF3B30', alignItems: 'center',
+  },
+  confirmDestructiveText: { fontSize: 16, color: '#fff', fontWeight: '600' },
 });

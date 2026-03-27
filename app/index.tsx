@@ -1,19 +1,52 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Image, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, View, Image } from 'react-native';
 import { router, useRootNavigationState, Href } from 'expo-router';
 import { useCollectionStore } from '../src/store/collectionStore';
 import { getCurrentUser, fetchUserProfile } from '../src/services/supabase';
 
+const isWeb = Platform.OS === 'web';
+
+function webRedirect(path: string) {
+  if (typeof window !== 'undefined') {
+    window.location.href = path;
+  }
+}
+
+async function navigate() {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      if (isWeb) { webRedirect('/auth/login'); return; }
+      router.replace('/auth/login' as Href);
+      return;
+    }
+    try {
+      const profile = await fetchUserProfile();
+      const { setCollectionName, setProfileImageUri } = useCollectionStore.getState();
+      if (profile) {
+        setCollectionName(profile.collection_name);
+        setProfileImageUri(profile.profile_image_url);
+      }
+    } catch {
+      // proceed even if profile fetch fails
+    }
+    if (isWeb) { webRedirect('/home'); return; }
+    router.replace('/home');
+  } catch {
+    if (isWeb) { webRedirect('/auth/login'); return; }
+    router.replace('/auth/login' as Href);
+  }
+}
+
 export default function SplashScreen() {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.88)).current;
+  const opacity = useRef(new Animated.Value(isWeb ? 1 : 0)).current;
+  const logoScale = useRef(new Animated.Value(isWeb ? 1 : 0.88)).current;
   const navigationState = useRootNavigationState();
   const navigated = useRef(false);
-  const setCollectionName = useCollectionStore((s) => s.setCollectionName);
-  const setProfileImageUri = useCollectionStore((s) => s.setProfileImageUri);
 
-  // Fade in + subtle scale up on mount
+  // Native only: fade in + subtle scale up on mount
   useEffect(() => {
+    if (isWeb) return;
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
@@ -29,8 +62,9 @@ export default function SplashScreen() {
     ]).start();
   }, []);
 
-  // Fade out before navigating
+  // Native only: fade out before navigating
   useEffect(() => {
+    if (isWeb) return;
     const fadeOut = setTimeout(() => {
       Animated.timing(opacity, {
         toValue: 0,
@@ -41,31 +75,25 @@ export default function SplashScreen() {
     return () => clearTimeout(fadeOut);
   }, []);
 
-  // Navigate after 3.2 seconds total
+  // Web navigation: wait for router to be ready then redirect
   useEffect(() => {
-    if (!navigationState?.key || navigated.current) return;
-    const timer = setTimeout(async () => {
+    if (!isWeb) return;
+    if (navigated.current) return;
+    // Small delay ensures Expo Router is initialised before we navigate
+    const timer = setTimeout(() => {
       navigated.current = true;
-      try {
-        const user = await getCurrentUser();
-        if (!user) {
-          router.replace('/auth/login' as Href);
-          return;
-        }
-        try {
-          const profile = await fetchUserProfile();
-          if (profile) {
-            setCollectionName(profile.collection_name);
-            setProfileImageUri(profile.profile_image_url);
-          }
-        } catch {
-          // proceed even if profile fetch fails
-        }
-        router.replace('/home');
-      } catch {
-        // Auth error (e.g. invalid/expired token) — treat as signed out
-        router.replace('/auth/login' as Href);
-      }
+      navigate();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Native navigation: wait for navigation state key
+  useEffect(() => {
+    if (isWeb) return;
+    if (!navigationState?.key || navigated.current) return;
+    const timer = setTimeout(() => {
+      navigated.current = true;
+      navigate();
     }, 3200);
     return () => clearTimeout(timer);
   }, [navigationState?.key]);
@@ -73,17 +101,21 @@ export default function SplashScreen() {
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.content, { opacity }]}>
-
         <Text style={styles.appName}>Vinyly</Text>
-
-        <Animated.Image
-          source={require('../assets/icon.png')}
-          style={[styles.logo, { transform: [{ scale: logoScale }] }]}
-          resizeMode="contain"
-        />
-
+        {isWeb ? (
+          <Image
+            source={require('../assets/icon.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        ) : (
+          <Animated.Image
+            source={require('../assets/icon.png')}
+            style={[styles.logo, { transform: [{ scale: logoScale }] }]}
+            resizeMode="contain"
+          />
+        )}
         <Text style={styles.tagline}>Family Vinyl Collections</Text>
-
       </Animated.View>
     </View>
   );
