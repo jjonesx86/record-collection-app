@@ -36,6 +36,13 @@ export default function RootLayout() {
       }
 
       if (event === 'SIGNED_IN' && Platform.OS === 'web') {
+        try {
+          const profile = await fetchUserProfile();
+          if (profile) {
+            useCollectionStore.getState().setCollectionName(profile.collection_name);
+            useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+          }
+        } catch { /* proceed */ }
         const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
         if (pathname === '/' || pathname.startsWith('/auth')) {
           router.replace('/home' as Href);
