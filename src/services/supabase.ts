@@ -111,10 +111,14 @@ export async function fetchRecordsByUser(userId: string): Promise<VinylRecord[]>
 export async function fetchUserProfile(): Promise<UserProfile | null> {
   const user = await getCurrentUser();
   if (!user) return null;
+  return fetchUserProfileById(user.id);
+}
+
+export async function fetchUserProfileById(userId: string): Promise<UserProfile | null> {
   const { data, error } = await db()
     .from('user_profiles')
     .select('collection_name, profile_image_url')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .maybeSingle();
   if (error) throw error;
   return data;

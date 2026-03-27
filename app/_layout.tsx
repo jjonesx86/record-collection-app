@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { Stack, router, Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { onAuthStateChange, fetchUserProfile } from '../src/services/supabase';
+import { onAuthStateChange, fetchUserProfileById } from '../src/services/supabase';
 import { useCollectionStore } from '../src/store/collectionStore';
 
 const HEADER_BG = '#1a1a2e';
@@ -21,7 +21,7 @@ export default function RootLayout() {
         // Only reroute from the root or auth pages — if already in the app, do nothing
         if (session && (pathname === '/' || pathname.startsWith('/auth'))) {
           try {
-            const profile = await fetchUserProfile();
+            const profile = await fetchUserProfileById(session.user.id);
             if (profile) {
               useCollectionStore.getState().setCollectionName(profile.collection_name);
               useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
@@ -36,13 +36,15 @@ export default function RootLayout() {
       }
 
       if (event === 'SIGNED_IN' && Platform.OS === 'web') {
-        try {
-          const profile = await fetchUserProfile();
-          if (profile) {
-            useCollectionStore.getState().setCollectionName(profile.collection_name);
-            useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
-          }
-        } catch { /* proceed */ }
+        if (session?.user) {
+          try {
+            const profile = await fetchUserProfileById(session.user.id);
+            if (profile) {
+              useCollectionStore.getState().setCollectionName(profile.collection_name);
+              useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+            }
+          } catch { /* proceed */ }
+        }
         const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
         if (pathname === '/' || pathname.startsWith('/auth')) {
           router.replace('/home' as Href);
