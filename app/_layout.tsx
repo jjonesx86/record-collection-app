@@ -1,24 +1,58 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { Stack, router, Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { onAuthStateChange } from '../src/services/supabase';
+import { onAuthStateChange, fetchUserProfile } from '../src/services/supabase';
 import { useCollectionStore } from '../src/store/collectionStore';
 
 const HEADER_BG = '#1a1a2e';
 
+function webRedirect(path: string) {
+  if (typeof window !== 'undefined') window.location.href = path;
+}
+
 export default function RootLayout() {
+  const initialised = useRef(false);
+
   useEffect(() => {
-    const { data: { subscription } } = onAuthStateChange((event, _session) => {
+    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
+      if (event === 'INITIAL_SESSION' && Platform.OS === 'web') {
+        const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+        // Only reroute from the root or auth pages — if already in the app, do nothing
+        if (session && (pathname === '/' || pathname.startsWith('/auth'))) {
+          try {
+            const profile = await fetchUserProfile();
+            if (profile) {
+              useCollectionStore.getState().setCollectionName(profile.collection_name);
+              useCollectionStore.getState().setProfileImageUri(profile.profile_image_url);
+            }
+          } catch { /* proceed */ }
+          router.replace('/home' as Href);
+        } else if (!session && !pathname.startsWith('/auth')) {
+          router.replace('/auth/login' as Href);
+        }
+        initialised.current = true;
+        return;
+      }
+
+      if (event === 'SIGNED_IN' && Platform.OS === 'web') {
+        const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+        if (pathname === '/' || pathname.startsWith('/auth')) {
+          webRedirect('/home');
+        }
+        return;
+      }
+
       if (event === 'SIGNED_OUT') {
         useCollectionStore.getState().clearAll();
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.href = '/auth/login';
+        if (Platform.OS === 'web') {
+          webRedirect('/auth/login');
         } else {
           router.replace('/auth/login' as Href);
         }
       }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -37,8 +71,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="collection/[id]" options={{ title: 'Record Details', headerBackTitle: 'Collection' }} />
-        <Stack.Screen name="privacy" options={{ headerShown: false }} />
-        <Stack.Screen name="terms" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ title: 'Privacy Policy', headerBackTitle: 'Settings' }} />
+        <Stack.Screen name="terms" options={{ title: 'Terms of Service', headerBackTitle: 'Settings' }} />
       </Stack>
     </>
   );
