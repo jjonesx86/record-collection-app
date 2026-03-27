@@ -608,7 +608,7 @@ export default function SettingsScreen() {
           <View style={styles.sectionDivider} />
           <TouchableOpacity
             style={styles.sectionRow}
-            onPress={() => Linking.openURL('https://record-collection-app.expo.app/downloads/vinyly.apk')}
+            onPress={() => Linking.openURL('https://vinyly.ai/downloads/vinyly.apk')}
             activeOpacity={0.7}
           >
             <Ionicons name="logo-android" size={20} color="#007AFF" style={styles.rowIcon} />
