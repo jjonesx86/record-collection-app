@@ -29,6 +29,7 @@
     "expo-linking": "~8.0.11",
     "expo-router": "~6.0.23",
     "expo-status-bar": "~3.0.9",
+    "expo-updates": "~29.0.16",
     "fuse.js": "^7.1.0",
     "html5-qrcode": "^2.3.8",
     "papaparse": "^5.5.3",
