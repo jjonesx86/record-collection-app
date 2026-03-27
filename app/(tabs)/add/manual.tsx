@@ -20,8 +20,9 @@ import { AlbumArtImage } from '../../../src/components/AlbumArtImage';
 import { DiscogsResultsPicker } from '../../../src/components/DiscogsResultsPicker';
 import { useDiscogs } from '../../../src/hooks/useDiscogs';
 import { useCollectionStore } from '../../../src/store/collectionStore';
-import { insertRecord } from '../../../src/services/supabase';
-import { DiscogsResult } from '../../../src/types';
+import { insertRecord, updateRecord } from '../../../src/services/supabase';
+import { findAlbumArt } from '../../../src/services/discogs';
+import { DiscogsResult, VinylRecord } from '../../../src/types';
 
 type Params = {
   destination?: 'collection' | 'wishlist';
@@ -52,6 +53,7 @@ export default function ManualEntryScreen() {
   const [discogsId, setDiscogsId] = useState(params.prefillDiscogsId ?? '');
   const [pickerVisible, setPickerVisible] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedRecord, setSavedRecord] = useState<VinylRecord | null>(null);
 
   const { results, isSearching, searchError, search, clearResults } = useDiscogs();
 
@@ -75,6 +77,7 @@ export default function ManualEntryScreen() {
   const displayResults = results.length > 0 ? results : preloadedResults;
 
   const addRecord = useCollectionStore((s) => s.addRecord);
+  const updateStoreRecord = useCollectionStore((s) => s.updateRecord);
   const hasDuplicate = useCollectionStore((s) => s.hasDuplicate);
   const hasWishlistDuplicate = useCollectionStore((s) => s.hasWishlistDuplicate);
 
@@ -152,9 +155,20 @@ export default function ManualEntryScreen() {
         is_wishlist: isWishlist,
       });
       addRecord(newRecord);
-      Alert.alert('Saved!', `"${album}" added to your ${destLabel.toLowerCase()}.`, [
-        { text: 'OK', onPress: () => router.push('/home') },
-      ]);
+      setSavedRecord(newRecord);
+
+      // If no art was found via Discogs, fetch it in the background
+      if (!artUrl.trim()) {
+        findAlbumArt({ artist: artist.trim(), album: album.trim() })
+          .then(url => {
+            if (url) {
+              updateRecord(newRecord.id, { album_art_url: url }).catch(() => {});
+              updateStoreRecord(newRecord.id, { album_art_url: url });
+              setSavedRecord(prev => prev ? { ...prev, album_art_url: url } : prev);
+            }
+          })
+          .catch(() => {});
+      }
     } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed to save record.');
     } finally {
@@ -163,6 +177,38 @@ export default function ManualEntryScreen() {
   };
 
   const accentColor = isWishlist ? WISHLIST_COLOR : COLLECTION_COLOR;
+
+  if (savedRecord) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <View style={styles.successContainer}>
+          <AlbumArtImage uri={savedRecord.album_art_url} size={140} style={styles.successArt} />
+          <Ionicons name="checkmark-circle" size={48} color="#34C759" style={styles.successIcon} />
+          <Text style={styles.successTitle}>{savedRecord.album}</Text>
+          <Text style={styles.successArtist}>{savedRecord.artist}</Text>
+          <Text style={styles.successDest}>
+            Added to your {isWishlist ? 'wish list' : 'collection'}
+          </Text>
+          <View style={styles.successActions}>
+            <TouchableOpacity
+              style={[styles.successBtn, { backgroundColor: accentColor }]}
+              onPress={() => router.push(`/collection/${savedRecord.id}` as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successBtnText}>View Album</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.successBtnSecondary}
+              onPress={() => router.replace('/(tabs)/add' as any)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.successBtnSecondaryText}>Add Another</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -361,6 +407,66 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#fff',
     fontSize: 17,
+    fontWeight: '600',
+  },
+
+  // Success screen
+  successContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    gap: 8,
+  },
+  successArt: {
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  successIcon: {
+    marginTop: 4,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  successArtist: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+  },
+  successDest: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successActions: {
+    width: '100%',
+    gap: 10,
+    marginTop: 8,
+  },
+  successBtn: {
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  successBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  successBtnSecondary: {
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: 'center',
+    backgroundColor: '#E5E5EA',
+  },
+  successBtnSecondaryText: {
+    color: '#111',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
